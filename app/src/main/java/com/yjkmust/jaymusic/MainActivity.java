@@ -17,6 +17,8 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.SeekBar;
+import android.widget.TextView;
 
 
 import com.yjkmust.jaymusic.Bean.MusicBean;
@@ -32,6 +34,8 @@ public class MainActivity extends AppCompatActivity {
     private List<MusicBean> musicList;
     private Context mContext;
     private String TAG = "MainActivity";
+    private SeekBar seekbarTime;
+    private TextView tvStartTime;
 
 
     @Override
@@ -45,13 +49,33 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "onCreate: "+bean.toString());
         }
         initView();
+        initListener();
     }
     private void initData(){
         musicList = new ArrayList<>();
         getLocalMusic();
     }
     private void initView(){
+        seekbarTime = binding.seekbarTime;
+        tvStartTime = binding.startTime;
+    }
+    private void initListener(){
+        seekbarTime.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+               tvStartTime.setText(progress+"%");
+            }
 
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
     }
     public class OnClick{
         public void showMusicList(View v){

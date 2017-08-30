@@ -23,5 +23,7 @@ public class MusicAdapter extends BaseQuickAdapter<MusicBean,BaseViewHolder> {
     protected void convert(BaseViewHolder helper, MusicBean musicBean) {
         helper.setText(R.id.tv_musicname, musicBean.getTitle());
         helper.setText(R.id.tv_musicsinger, musicBean.getArtist());
+        helper.addOnClickListener(R.id.iv_star);
+        helper.addOnClickListener(R.id.iv_delete);
     }
 }

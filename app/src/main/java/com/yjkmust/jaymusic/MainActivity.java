@@ -12,17 +12,25 @@ import android.provider.MediaStore;
 import android.support.design.widget.BottomSheetDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Adapter;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 
+import com.chad.library.adapter.base.BaseQuickAdapter;
+import com.yjkmust.jaymusic.Adapters.MusicAdapter;
 import com.yjkmust.jaymusic.Bean.MusicBean;
 import com.yjkmust.jaymusic.Widgets.MyBottomSheetDialog;
+import com.yjkmust.jaymusic.Widgets.MyItemDecoration;
+import com.yjkmust.jaymusic.Widgets.MyRecyclerView;
 import com.yjkmust.jaymusic.databinding.ActivityMainBinding;
 
 import java.util.ArrayList;
@@ -36,6 +44,10 @@ public class MainActivity extends AppCompatActivity {
     private String TAG = "MainActivity";
     private SeekBar seekbarTime;
     private TextView tvStartTime;
+    private BottomSheetDialog dialog;
+    private View view;
+    private MyRecyclerView musicRecyclerView;
+    private MusicAdapter adapter;
 
 
     @Override
@@ -44,20 +56,27 @@ public class MainActivity extends AppCompatActivity {
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main);
         binding.setOnClick(new OnClick());
         mContext = this;
+        initView();
+        initListener();
         initData();
         for (MusicBean bean : musicList){
             Log.d(TAG, "onCreate: "+bean.toString());
         }
-        initView();
-        initListener();
+
     }
     private void initData(){
         musicList = new ArrayList<>();
         getLocalMusic();
+
     }
     private void initView(){
         seekbarTime = binding.seekbarTime;
         tvStartTime = binding.startTime;
+        initBottomDialog();
+    }
+    private void initBottomDialog(){
+
+
     }
     private void initListener(){
         seekbarTime.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -78,11 +97,39 @@ public class MainActivity extends AppCompatActivity {
         });
     }
     public class OnClick{
+
         public void showMusicList(View v){
-            BottomSheetDialog dialog = new MyBottomSheetDialog(MainActivity.this);
+            dialog = new MyBottomSheetDialog(MainActivity.this,R.style.MyBottomSheetDialogStyle);
             View view = LayoutInflater.from(MainActivity.this).inflate(R.layout.bottom_music_list_view, null);
+            MyRecyclerView musicRecyclerView = (MyRecyclerView) view.findViewById(R.id.music_recyclerview);
+            musicRecyclerView.addItemDecoration(new MyItemDecoration());
+            musicRecyclerView.setLayoutManager(new LinearLayoutManager(MainActivity.this));
+            adapter = new MusicAdapter(musicList);
+            adapter.setOnItemClickListener(new BaseQuickAdapter.OnItemClickListener() {
+                @Override
+                public void onItemClick(BaseQuickAdapter baseQuickAdapter, View view, int position) {
+                    Toast.makeText(MainActivity.this,"Item"+position,Toast.LENGTH_SHORT).show();
+                }
+            });
+            adapter.setOnItemChildClickListener(new BaseQuickAdapter.OnItemChildClickListener() {
+                @Override
+                public void onItemChildClick(BaseQuickAdapter baseQuickAdapter, View view, int position) {
+                    switch (view.getId()){
+                        case R.id.iv_star:
+                            Toast.makeText(MainActivity.this,"ItemClickone"+position,Toast.LENGTH_SHORT).show();
+                            break;
+                        case R.id.iv_delete:
+                            Toast.makeText(MainActivity.this,"ItemClicktwo"+position,Toast.LENGTH_SHORT).show();
+                            break;
+                    }
+                }
+            });
+            musicRecyclerView.setAdapter(adapter);
             dialog.setContentView(view);
+            dialog.setCanceledOnTouchOutside(true);
             dialog.show();
+
+
         }
     }
     private void getLocalMusic(){

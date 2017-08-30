@@ -7,7 +7,9 @@ import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.design.widget.BottomSheetDialog;
 import android.util.DisplayMetrics;
+import android.view.MotionEvent;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 /**
  * Created by 11432 on 2017/8/21.
@@ -18,6 +20,12 @@ public class MyBottomSheetDialog extends BottomSheetDialog {
     public MyBottomSheetDialog(@NonNull Context context) {
         super(context);
         this.context=context;
+    }
+
+    public MyBottomSheetDialog(@NonNull Context context, int theme) {
+        super(context, theme);
+        this.context = context;
+
     }
 
     @Override
@@ -44,4 +52,5 @@ public class MyBottomSheetDialog extends BottomSheetDialog {
         }
         return statusBarHeight;
     }
+
 }

@@ -57,6 +57,7 @@
             android:layout_below="@id/ll_title">
 
             <TextView
+                android:id="@+id/tv_singler"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="李健"
@@ -72,7 +73,9 @@
             <android.support.v4.view.ViewPager
                 android:id="@+id/music_viewpager"
                 android:layout_width="match_parent"
-                android:layout_height="320dp"></android.support.v4.view.ViewPager>
+                android:layout_height="320dp">
+
+            </android.support.v4.view.ViewPager>
         </LinearLayout>
 
         <LinearLayout
@@ -98,11 +101,11 @@
                     android:textColor="#000"
                     android:layout_centerVertical="true"
                     android:layout_toLeftOf="@id/seekbar_time"
-                    android:layout_marginRight="8dp" />
+                    android:layout_marginRight="3dp" />
 
                 <SeekBar
                     android:id="@+id/seekbar_time"
-                    android:layout_width="260dp"
+                    android:layout_width="250dp"
                     android:layout_height="wrap_content"
                     android:layout_centerInParent="true"
                     android:maxHeight="2dp"
@@ -118,14 +121,14 @@
                     android:textColor="#000"
                     android:layout_centerVertical="true"
                     android:layout_toRightOf="@id/seekbar_time"
-                    android:layout_marginLeft="8dp" />
+                    android:layout_marginLeft="3dp" />
             </RelativeLayout>
 
             <RelativeLayout
                 android:id="@+id/rl_music_control"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp">
+                android:layout_marginTop="30dp">
 
                 <ImageView
                     android:id="@+id/music_pre"
@@ -133,14 +136,17 @@
                     android:layout_height="40dp"
                     android:src="@drawable/img_pre"
                     android:layout_toLeftOf="@id/music_playorstop"
-                    android:layout_marginRight="40dp" />
+                    android:layout_marginRight="40dp"
+                    android:layout_centerVertical="true"
+                    android:onClick="@{onClick.preMusic}"/>
 
                 <ImageView
                     android:id="@+id/music_playorstop"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
                     android:layout_centerInParent="true"
-                    android:src="@drawable/img_stop" />
+                    android:src="@drawable/img_stop"
+                    android:onClick="@{onClick.playOrStopMusic}"/>
 
                 <ImageView
                     android:id="@+id/music_next"
@@ -149,7 +155,9 @@
                     android:src="@drawable/img_next"
                     android:layout_toRightOf="@id/music_playorstop"
                     android:layout_marginRight="30dp"
-                    android:layout_marginLeft="40dp" />
+                    android:layout_marginLeft="40dp"
+                    android:layout_centerVertical="true"
+                    android:onClick="@{onClick.nextMusic}"/>
             </RelativeLayout>
         </LinearLayout>
 

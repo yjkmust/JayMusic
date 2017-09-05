@@ -2,22 +2,36 @@ package com.yjkmust.jaymusic;
 
 
 import android.Manifest;
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.database.Cursor;
 import android.databinding.DataBindingUtil;
 import android.databinding.ViewDataBinding;
 import android.media.MediaPlayer;
+import android.os.Build;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Message;
 import android.provider.BaseColumns;
 import android.provider.MediaStore;
 import android.support.annotation.NonNull;
 import android.support.design.widget.BottomSheetDialog;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
@@ -27,7 +41,13 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.AnimationUtils;
+import android.view.animation.LinearInterpolator;
+import android.view.animation.RotateAnimation;
 import android.widget.Adapter;
+import android.widget.ImageView;
+import android.widget.RemoteViews;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -36,7 +56,9 @@ import android.widget.Toolbar;
 
 import com.chad.library.adapter.base.BaseQuickAdapter;
 import com.yjkmust.jaymusic.Adapters.MusicAdapter;
+import com.yjkmust.jaymusic.Adapters.MyPagerAdapter;
 import com.yjkmust.jaymusic.Bean.MusicBean;
+import com.yjkmust.jaymusic.Service.MyService;
 import com.yjkmust.jaymusic.Widgets.MyBottomSheetDialog;
 import com.yjkmust.jaymusic.Widgets.MyItemDecoration;
 import com.yjkmust.jaymusic.Widgets.MyRecyclerView;
@@ -51,6 +73,8 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import static android.app.Notification.FLAG_AUTO_CANCEL;
+
 
 public class MainActivity extends AppCompatActivity {
     private ActivityMainBinding binding;
@@ -60,29 +84,48 @@ public class MainActivity extends AppCompatActivity {
     private SeekBar seekbarTime;
     private TextView tvStartTime;
     private BottomSheetDialog dialog;
-    private View view;
-    private MyRecyclerView musicRecyclerView;
     private MusicAdapter adapter;
-    private MediaPlayer mediaPlayer;
     private boolean isPlaying = false;
     private int musicPosition = 0;
-    private Timer timer;
-    private TimerTask timerTask;
     private Boolean isSeekBarTouch = false;
     private boolean isFirst = true;
+    private int musicProgress = 0;
+    private LocalReceiver localReceiver;
+    private IntentFilter intentFilter;
+    private MyService.MusicControlBinder binder;
+    private ServiceConnection connection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+            binder = (MyService.MusicControlBinder) iBinder;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+
+        }
+    };
+    private View viewpager1;
+    private View viewpager2;
+    private List<View> viewList;
+    private MyPagerAdapter myPagerAdapter;
+    private ImageView ivPic;
+    private Animation animations;
+    private LinearInterpolator interpolator;
+    private ObjectAnimator anim;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main);
         binding.setOnClick(new OnClick());
+        Intent intent = new Intent(this, MyService.class);
+        bindService(intent, connection, BIND_AUTO_CREATE);
         mContext = this;
-        mediaPlayer = new MediaPlayer();
+        initBroadCastReceiver();
         initView();
         initListener();
         initData();
         initMediaPlayer();
-//        sendProgress();
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
         }
@@ -104,25 +147,37 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void initMediaPlayer() {
-        binding.tvTitle.setText(musicList.get(musicPosition).getTitle());
-        binding.tvSingler.setText(musicList.get(musicPosition).getArtist());
-        binding.endTime.setText(toMinute(musicList.get(musicPosition).getDuration()));
-        try {
-            mediaPlayer.setDataSource(musicList.get(musicPosition).getPath());
-            mediaPlayer.prepare();
-        } catch (IOException e) {
-            e.printStackTrace();
+        if (musicList.size() > 0) {
+            binding.tvTitle.setText(musicList.get(musicPosition).getTitle());
+            binding.tvSingler.setText(musicList.get(musicPosition).getArtist());
+            binding.endTime.setText(toMinute(musicList.get(musicPosition).getDuration()));
         }
 
     }
 
     private void initData() {
         musicList = new ArrayList<>();
-        getLocalMusic();
+
+        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
+        } else {
+            getLocalMusic();
+        }
+
 
     }
 
     private void initView() {
+        LayoutInflater layoutInflater = LayoutInflater.from(MainActivity.this);
+        viewpager1 = layoutInflater.inflate(R.layout.item_viewpager_pic, null);
+        viewpager2 = layoutInflater.inflate(R.layout.item_viewpager_lyric, null);
+        viewList = new ArrayList<>();
+        viewList.add(viewpager1);
+        viewList.add(viewpager2);
+        myPagerAdapter = new MyPagerAdapter(viewList);
+        binding.musicViewpager.setAdapter(myPagerAdapter);
+        ivPic = (ImageView) viewpager1.findViewById(R.id.iv_viewpager_pic);
+        animations = AnimationUtils.loadAnimation(mContext, R.anim.pic_rotate);
         seekbarTime = binding.seekbarTime;
         tvStartTime = binding.startTime;
 
@@ -132,7 +187,7 @@ public class MainActivity extends AppCompatActivity {
         seekbarTime.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                int currentPosition = mediaPlayer.getCurrentPosition();
+                int currentPosition = binder.getCurrentDuaration();
                 tvStartTime.setText(toMinute(currentPosition));
             }
 
@@ -145,15 +200,16 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
                 isSeekBarTouch = false;
-                mediaPlayer.seekTo(seekBar.getProgress());
-
+                binder.musicSeekTo(seekBar.getProgress());
             }
         });
     }
 
     public class OnClick {
-
         public void showMusicList(View v) {
+            if (musicList == null) {
+                getLocalMusic();
+            }
             dialog = new MyBottomSheetDialog(MainActivity.this, R.style.MyBottomSheetDialogStyle);
             View view = LayoutInflater.from(MainActivity.this).inflate(R.layout.bottom_music_list_view, null);
             MyRecyclerView musicRecyclerView = (MyRecyclerView) view.findViewById(R.id.music_recyclerview);
@@ -163,25 +219,17 @@ public class MainActivity extends AppCompatActivity {
             adapter.setOnItemClickListener(new BaseQuickAdapter.OnItemClickListener() {
                 @Override
                 public void onItemClick(BaseQuickAdapter baseQuickAdapter, View view, int position) {
-                    try {
-                        if (isPlaying) {
-                            mediaPlayer.reset();
-                        }
-                        musicPosition = position;
-                        mediaPlayer.setDataSource(musicList.get(musicPosition).getPath());
-                        mediaPlayer.prepare();
-                        mediaPlayer.start();
-                        isPlaying = true;
-                        dialog.dismiss();
-                        updateSeekbar();
-                        binding.musicPlayorstop.setImageResource(R.drawable.img_play);
-                        binding.tvTitle.setText(musicList.get(position).getTitle());
-                        binding.tvSingler.setText(musicList.get(position).getArtist());
-                        binding.endTime.setText(toMinute(musicList.get(musicPosition).getDuration()));
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    Toast.makeText(MainActivity.this, "Item" + position, Toast.LENGTH_SHORT).show();
+                    musicPosition = position;
+                    binder.prepareMusic(musicList.get(musicPosition).getPath());
+                    binder.startMusic();
+                    isPlaying = true;
+                    dialog.dismiss();
+                    updateSeekbar();
+                    startNotification();
+                    binding.musicPlayorstop.setImageResource(R.drawable.img_play);
+                    binding.tvTitle.setText(musicList.get(position).getTitle());
+                    binding.tvSingler.setText(musicList.get(position).getArtist());
+                    binding.endTime.setText(toMinute(musicList.get(musicPosition).getDuration()));
                 }
             });
             adapter.setOnItemChildClickListener(new BaseQuickAdapter.OnItemChildClickListener() {
@@ -209,67 +257,55 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 musicPosition--;
             }
-            try {
-                if (isPlaying) {
-                    mediaPlayer.reset();
-                }
-                mediaPlayer.reset();
-                mediaPlayer.setDataSource(musicList.get(musicPosition).getPath());
-                mediaPlayer.prepare();
-                mediaPlayer.start();
-                updateSeekbar();
-                binding.tvTitle.setText(musicList.get(musicPosition).getTitle());
-                binding.tvSingler.setText(musicList.get(musicPosition).getArtist());
-                binding.endTime.setText(toMinute(musicList.get(musicPosition).getDuration()));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
+            binder.PreMusic(musicList.get(musicPosition).getPath());
+            updateSeekbar();
+            binding.musicPlayorstop.setImageResource(R.drawable.img_play);
+            binding.tvTitle.setText(musicList.get(musicPosition).getTitle());
+            binding.tvSingler.setText(musicList.get(musicPosition).getArtist());
+            binding.endTime.setText(toMinute(musicList.get(musicPosition).getDuration()));
         }
 
         public void playOrStopMusic(View view) {
-            if (isFirst){
-                mediaPlayer.start();
+            startNotification();
+            if (isFirst) {
+                binder.prepareMusic(musicList.get(musicPosition).getPath());
+                binder.startMusic();
+                startPropertyAnim();
                 isFirst = false;
                 isPlaying = true;
                 updateSeekbar();
                 binding.musicPlayorstop.setImageResource(R.drawable.img_play);
-            }else {
+            } else {
                 if (isPlaying) {
                     isPlaying = false;
-                    mediaPlayer.pause();
+                    binder.StopMusic();
+                    anim.pause();
                     binding.musicPlayorstop.setImageResource(R.drawable.img_stop);
                 } else {
                     isPlaying = true;
-                    mediaPlayer.start();
+                    binder.startMusic();
+                    anim.resume();
                     binding.musicPlayorstop.setImageResource(R.drawable.img_play);
                 }
             }
-
         }
 
         public void nextMusic(View view) {
+            if (isFirst) {
+                startPropertyAnim();
+            }
             if (musicList.size() == musicPosition + 1) {
                 musicPosition = 0;
             } else {
                 musicPosition++;
             }
-            try {
-                if (isPlaying) {
-                    mediaPlayer.reset();
-                }
-                mediaPlayer.reset();
-                mediaPlayer.setDataSource(musicList.get(musicPosition).getPath());
-                mediaPlayer.prepare();
-                mediaPlayer.start();
-                updateSeekbar();
-                binding.tvTitle.setText(musicList.get(musicPosition).getTitle());
-                binding.tvSingler.setText(musicList.get(musicPosition).getArtist());
-                binding.endTime.setText(toMinute(musicList.get(musicPosition).getDuration()));
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-
+            changePic();
+            binder.NextMusic(musicList.get(musicPosition).getPath());
+            updateSeekbar();
+            binding.musicPlayorstop.setImageResource(R.drawable.img_play);
+            binding.tvTitle.setText(musicList.get(musicPosition).getTitle());
+            binding.tvSingler.setText(musicList.get(musicPosition).getArtist());
+            binding.endTime.setText(toMinute(musicList.get(musicPosition).getDuration()));
         }
     }
 
@@ -320,6 +356,7 @@ public class MainActivity extends AppCompatActivity {
             musicList.add(bean);
         }
     }
+
     /**
      * 毫秒转成分
      */
@@ -332,28 +369,128 @@ public class MainActivity extends AppCompatActivity {
     /**
      * 播放更新进度条
      */
-    private void updateSeekbar(){
-        seekbarTime.setMax(mediaPlayer.getDuration());
-        timer = new Timer();
-        timerTask = new TimerTask() {
-            @Override
-            public void run() {
-                if (isSeekBarTouch) {
-                    return;
-                }
-                seekbarTime.setProgress(mediaPlayer.getCurrentPosition());
+    private void updateSeekbar() {
+        seekbarTime.setMax(binder.getDuration());
+    }
 
-            }
-        };
-        timer.schedule(timerTask,0,10);
+    /**
+     * 更新图片
+     */
+    private void changePic() {
+        ivPic.setImageResource(R.mipmap.jay1);
+        anim.cancel();
+        anim.start();
+    }
+
+    private void initBroadCastReceiver() {
+        intentFilter = new IntentFilter();
+        intentFilter.addAction("YJKMUST.RECEIVER");
+        localReceiver = new LocalReceiver();
+        registerReceiver(localReceiver, intentFilter);
     }
 
     @Override
     protected void onDestroy() {
-        if (mediaPlayer != null) {
-            mediaPlayer.stop();
-            mediaPlayer.release();
-        }
+        unbindService(connection);
         super.onDestroy();
+    }
+
+    class LocalReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            musicProgress = intent.getIntExtra("time", 0);
+            if (isSeekBarTouch) {
+                return;
+            } else {
+                seekbarTime.setProgress(musicProgress);
+            }
+            if (musicProgress >= seekbarTime.getMax() - 1000) {
+                if (musicList.size() == musicPosition + 1) {
+                    musicPosition = 0;
+                } else {
+                    musicPosition++;
+                }
+                initMediaPlayer();
+                if (musicPosition % 2 == 0) {
+                    ivPic.setImageResource(R.mipmap.jay1);
+                } else {
+                    ivPic.setImageResource(R.mipmap.jay);
+                }
+                startPropertyAnim();
+                binder.NextMusic(musicList.get(musicPosition).getPath());
+                updateSeekbar();
+            }
+        }
+    }
+
+    private void startPropertyAnim() {
+        // 第二个参数"rotation"表明要执行旋转
+        // 0f -> 360f，从旋转360度，也可以是负值，负值即为逆时针旋转，正值是顺时针旋转。
+        anim = ObjectAnimator.ofFloat(ivPic, "rotation", 0f, 360f);
+
+        // 动画的持续时间，执行多久？
+        anim.setDuration(20000);
+        anim.setRepeatCount(-1);
+        anim.setInterpolator(new LinearInterpolator());
+
+        // 回调监听
+        anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float value = (Float) animation.getAnimatedValue();
+                Log.d("zhangphil", value + "");
+            }
+        });
+
+        // 正式开始启动执行动画
+        anim.start();
+    }
+
+    private void startNotification() {
+//        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+//        Intent intents=new Intent(getApplicationContext(), MainActivity.class);
+//        PendingIntent intent=PendingIntent.getActivity(getApplicationContext(), 1, intents, Notification.FLAG_AUTO_CANCEL);
+//        Notification notification = new Notification.Builder(this)
+////                .setContent(new RemoteViews(getPackageName(),R.layout.item_notification))
+//                 .setContentIntent(intent)
+//                .setSmallIcon(R.mipmap.ic_launcher)
+//                .setContentTitle("888")
+//                .setContentText("66")
+//                .setTicker("6")
+//                .setWhen(System.currentTimeMillis())
+//                .build();
+//        manager.notify(1,notification);
+//        NotificationManager mNotifyMgr =
+//                (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+//        PendingIntent contentIntent = PendingIntent.getActivity(
+//                this, 0, new Intent(this, MainActivity.class),0);
+//        NotificationCompat.Builder mBuilder =
+//                new NotificationCompat.Builder(this)
+//                        .setSmallIcon(R.mipmap.ic_launcher)
+//                        .setContentTitle("My notification")
+//                        .setContentText("Hello World!")
+//                        .setContentIntent(contentIntent);
+//        Notification notification = mBuilder.build();
+//        notification.defaults = Notification.DEFAULT_ALL;
+//        mNotifyMgr.notify(1,notification);
+        PendingIntent mainPendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), 0);
+        NotificationManager notifyManager = (NotificationManager) this.getSystemService(Context.NOTIFICATION_SERVICE);
+        //实例化NotificationCompat.Builde并设置相关属性
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
+                //设置小图标
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setAutoCancel(true)
+                .setContentIntent(mainPendingIntent)
+                //设置通知时间，默认为系统发出通知的时间，通常不用设置
+                .setWhen(System.currentTimeMillis());
+        Notification notification = builder.build();
+        RemoteViews remoteViews = new RemoteViews(this.getPackageName(), R.layout.item_notification);
+        if(Build.VERSION.SDK_INT >= 16){
+            notification.bigContentView = remoteViews;
+        }
+        //通过builder.build()方法生成Notification对象,并发送通知,id=1
+        notifyManager.notify(1, notification);
+
     }
 }
